@@ -219,9 +219,9 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
     #  Testing
     with log.subproc('Start testing'):
         metrics = trainer.test(model, test_loader)
-        print('Metrics:')
-        print(type(metrics))
-        print(metrics)
+        # print('Metrics:')
+        # print(type(metrics))
+        # print(metrics)
         # metrics = metrics[0]
         log.message('End testing')
 
@@ -232,7 +232,8 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         log.message('Model saved')
 
     # Save metrics
-    metrics = {key: float(value) for key, value in metrics.items()}
+    # metrics = {key: float(value) for key, value in metrics.items()}
+    metrics = {}
     metrics['time'] = time_taken
     metrics_file = params_in.output_dir / 'metrics.yml'
     with log.subproc('Saving inference metrics to a file'):
