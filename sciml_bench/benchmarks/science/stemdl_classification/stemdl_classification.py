@@ -57,7 +57,6 @@ from sciml_bench.core.config import ProgramEnv
 from sciml_bench.core.utils import SafeDict
 
 
-# Custom dataset class
 class NPZDataset(Dataset):
     def __init__(self, npz_root):
         self.files = glob.glob(npz_root + "/*.npz")
@@ -146,6 +145,7 @@ class StemDLClassifier(pl.LightningModule):
         x, _ = batch
         y_hat = self.model(x)
         return y_hat
+
 
 #####################################################################
 # Training mode                                                     #
