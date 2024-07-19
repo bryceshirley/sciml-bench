@@ -160,7 +160,7 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         'epochs': 10,
         'nodes': 1,
         'gpus': 1
-    }    
+    }
 
     # Log top-level process
     log = params_out.log.console
@@ -218,23 +218,10 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
 
     #  Testing
     with log.subproc('Start testing'):
-        try:
-            # Ensure that the test method returns metrics
-            metrics = trainer.test(model, test_loader)
-            if not metrics:
-                raise ValueError("Metrics list is empty or not in expected format.")
-            if not isinstance(metrics, list):
-                raise ValueError("Metrics is not in the expected list format.")
-            if len(metrics) == 0:
-                raise ValueError("Metrics list is empty or not in expected format.")
-
-            # Metrics is expected to be a list of dictionaries
-            metrics_dict = metrics[0]  # Get the first dictionary from the list
-            log.message('End testing')
-        except Exception as e:
-            # Use available logging method
-            log.message(f"Error during testing or metric retrieval: {e}")
-            #raise
+        metrics = trainer.test(model, test_loader)
+        print(type(metrics))
+        # metrics = metrics[0]
+        log.message('End testing')
 
     # Save model
     model_path = params_in.output_dir / 'stemdlModel.h5'
@@ -243,8 +230,8 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         log.message('Model saved')
 
     # Save metrics
-    metrics_dict = {key: float(value) for key, value in metrics_dict.items()}
-    metrics_dict['time'] = time_taken
+    metrics = {key: float(value) for key, value in metrics.items()}
+    metrics['time'] = time_taken
     metrics_file = params_in.output_dir / 'metrics.yml'
     with log.subproc('Saving inference metrics to a file'):
         with open(metrics_file, 'w') as handle:
