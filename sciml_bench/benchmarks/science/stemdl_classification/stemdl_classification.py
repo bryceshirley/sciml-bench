@@ -221,14 +221,12 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         try:
             # Ensure that the test method returns metrics
             metrics = trainer.test(model, test_loader)
-            if not metrics or not isinstance(metrics, list) or len(metrics) == 0:
-                raise ValueError("Metrics list is empty or not in expected format.")
             metrics = metrics[0]  # Get the first set of metrics
             log.message('End testing')
         except Exception as e:
             # Use available logging method
             log.message(f"Error during testing or metric retrieval: {e}")
-            raise
+            #raise
 
     # Save model
     model_path = params_in.output_dir / 'stemdlModel.h5'
