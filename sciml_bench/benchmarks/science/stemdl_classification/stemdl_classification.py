@@ -134,6 +134,16 @@ class StemDLClassifier(pl.LightningModule):
         self.log('f1', avg_f1 * 100)
         self.accuracy.reset()
         self.f1_score.reset()
+    
+    def on_test_epoch_end(self) -> None:
+        # Access stored outputs
+        outputs = self.test_outputs
+        avg_accuracy = self.accuracy.compute()
+        avg_f1 = self.f1_score.compute()
+        self.log('accuracy', avg_accuracy * 100)
+        self.log('f1', avg_f1 * 100)
+        self.accuracy.reset()
+        self.f1_score.reset()    
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
@@ -229,8 +239,7 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         log.message('Model saved')
 
     # Save metrics
-    # metrics = {key: float(value) for key, value in metrics.items()}
-    metrics = {}
+    metrics = {key: float(value) for key, value in metrics.items()}
     metrics['time'] = time_taken
     metrics_file = params_in.output_dir / 'metrics.yml'
     with log.subproc('Saving inference metrics to a file'):
