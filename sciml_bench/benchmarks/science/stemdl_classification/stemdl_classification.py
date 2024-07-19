@@ -110,13 +110,18 @@ class StemDLClassifier(pl.LightningModule):
         self.f1_score(y_hat, y)
         return loss
 
-    def on_validation_epoch_end(self):
+    # def on_validation_epoch_end(self):
+    #     avg_accuracy = self.accuracy.compute()
+    #     avg_f1 = self.f1_score.compute()
+    #     self.log('valid_accuracy', avg_accuracy, prog_bar=True)
+    #     self.log('valid_f1', avg_f1, prog_bar=True)
+    #     self.accuracy.reset()
+    #     self.f1_score.reset()
+    def on_validation_epoch_end(self) -> None:
         avg_accuracy = self.accuracy.compute()
         avg_f1 = self.f1_score.compute()
         self.log('valid_accuracy', avg_accuracy, prog_bar=True)
         self.log('valid_f1', avg_f1, prog_bar=True)
-        self.accuracy.reset()
-        self.f1_score.reset()
 
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
@@ -127,23 +132,29 @@ class StemDLClassifier(pl.LightningModule):
         self.accuracy(y_hat, y)
         self.f1_score(y_hat, y)
 
-    def test_epoch_end(self, outputs):
-        avg_accuracy = self.accuracy.compute()
-        avg_f1 = self.f1_score.compute()
-        self.log('accuracy', avg_accuracy * 100)
-        self.log('f1', avg_f1 * 100)
-        self.accuracy.reset()
-        self.f1_score.reset()
+    # def test_epoch_end(self, outputs):
+    #     avg_accuracy = self.accuracy.compute()
+    #     avg_f1 = self.f1_score.compute()
+    #     self.log('accuracy', avg_accuracy * 100)
+    #     self.log('f1', avg_f1 * 100)
+    #     self.accuracy.reset()
+    #     self.f1_score.reset()
     
+    # def on_test_epoch_end(self) -> None:
+    #     # Access stored outputs
+    #     outputs = self.test_outputs
+    #     avg_accuracy = self.accuracy.compute()
+    #     avg_f1 = self.f1_score.compute()
+    #     self.log('accuracy', avg_accuracy * 100)
+    #     self.log('f1', avg_f1 * 100)
+    #     self.accuracy.reset()
+    #     self.f1_score.reset()
     def on_test_epoch_end(self) -> None:
-        # Access stored outputs
-        outputs = self.test_outputs
-        avg_accuracy = self.accuracy.compute()
-        avg_f1 = self.f1_score.compute()
+        avg_accuracy = torch.mean(torch.tensor([out['accuracy'] for out in self.test_outputs]))
+        avg_f1 = torch.mean(torch.tensor([out['f1'] for out in self.test_outputs]))
+
         self.log('accuracy', avg_accuracy * 100)
         self.log('f1', avg_f1 * 100)
-        self.accuracy.reset()
-        self.f1_score.reset()    
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
