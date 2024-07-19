@@ -154,7 +154,6 @@ class StemDLClassifier(pl.LightningModule):
 # sciml-bench run stemdl_classification --mode training -b epochs 1 -b batchsize 32 -b nodes 1 -b gpus 1
 
 def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
-
     # Entry point for the training routine to be called by SciML-Bench
     default_args = {
         'batchsize': 32,
@@ -163,14 +162,14 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         'gpus': 1
     }    
 
-    # Log top level process
+    # Log top-level process
     log = params_out.log.console
     log.begin(f'Running benchmark stemdl_classification on training mode')
 
     # Parse input arguments against default ones 
     with log.subproc('Parsing input arguments'):
         args = params_in.bench_args.try_get_dict(default_args=default_args)
-    
+
     # Set data paths
     with log.subproc('Set data paths'):
         basePath = params_in.dataset_dir
@@ -178,8 +177,7 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         validationPath = os.path.expanduser(basePath / 'validation')
         testingPath = os.path.expanduser(basePath / 'testing')
 
-    # Datasets: training (138717 files), validation (20000 files), 
-    # testing (20000 files), prediction (8438 files), 197kbytes each
+    # Create datasets
     with log.subproc('Create datasets'):
         train_dataset = NPZDataset(trainingPath)
         val_dataset = NPZDataset(validationPath)
@@ -192,19 +190,14 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         nodes = int(args["nodes"])
         gpus = int(args["gpus"])
 
-    with log.subproc('Create datasets'):
-        train_dataset = NPZDataset(trainingPath)
-        val_dataset = NPZDataset(validationPath)
-        test_dataset = NPZDataset(testingPath)
-
     # Create data loaders
     with log.subproc('Create data loaders'):
-        train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=4)
-        val_loader = DataLoader(val_dataset, batch_size=bs, num_workers=4)
-        test_loader = DataLoader(test_dataset, batch_size=bs, num_workers=4)
+        train_loader = DataLoader(train_dataset, batch_size=bs, num_workers=4, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=bs, num_workers=4, shuffle=False)
+        test_loader = DataLoader(test_dataset, batch_size=bs, num_workers=4, shuffle=False)
 
     # Model
-    with log.subproc('Create data model'):
+    with log.subproc('Create model'):
         model = StemDLClassifier()
 
     # Training
@@ -225,9 +218,16 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
 
     # Testing
     with log.subproc('Start testing'):
-        metrics = trainer.test(model, test_loader)
-        metrics = metrics[0]
-        log.message('End testing')
+        try:
+            # Ensure that the test method returns metrics
+            metrics = trainer.test(model, test_loader)
+            if not metrics or not isinstance(metrics, list) or len(metrics) == 0:
+                raise ValueError("Metrics list is empty or not in expected format.")
+            metrics = metrics[0]  # Get the first set of metrics
+            log.message('End testing')
+        except Exception as e:
+            log.error(f"Error during testing or metric retrieval: {e}")
+            raise
 
     # Save model
     model_path = params_in.output_dir / 'stemdlModel.h5'
