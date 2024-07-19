@@ -71,7 +71,6 @@ class NPZDataset(Dataset):
     def __len__(self):
         return len(self.files)
 
-# LitAutoEncoder
 class StemDLClassifier(pl.LightningModule):
     def __init__(self):
         super().__init__()
@@ -82,12 +81,15 @@ class StemDLClassifier(pl.LightningModule):
         self.num_ftrs = self.model.fc.in_features
         self.model.fc = nn.Linear(self.num_ftrs, self.num_classes)
         self.feature_extract = False
-        self.accuracy = tm.classification.MulticlassAccuracy(self.num_classes)
+        
+        self.accuracy = tm.classification.MulticlassAccuracy(num_classes=self.num_classes)
         self.f1_score = tm.classification.F1Score(task='multiclass', num_classes=self.num_classes, average='macro')
 
+        # To store outputs for later use
+        self.test_outputs = []
+
     def forward(self, x):
-        embedding = self.model(x)
-        return embedding
+        return self.model(x)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=0.001, weight_decay=0.00005)
@@ -110,18 +112,11 @@ class StemDLClassifier(pl.LightningModule):
         self.f1_score(y_hat, y)
         return loss
 
-    # def on_validation_epoch_end(self):
-    #     avg_accuracy = self.accuracy.compute()
-    #     avg_f1 = self.f1_score.compute()
-    #     self.log('valid_accuracy', avg_accuracy, prog_bar=True)
-    #     self.log('valid_f1', avg_f1, prog_bar=True)
-    #     self.accuracy.reset()
-    #     self.f1_score.reset()
     def on_validation_epoch_end(self) -> None:
         avg_accuracy = self.accuracy.compute()
         avg_f1 = self.f1_score.compute()
-        self.log('valid_accuracy', avg_accuracy, prog_bar=True)
-        self.log('valid_f1', avg_f1, prog_bar=True)
+        self.log('valid_accuracy', avg_accuracy, prog_bar=True, sync_dist=True)
+        self.log('valid_f1', avg_f1, prog_bar=True, sync_dist=True)
 
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
@@ -132,32 +127,23 @@ class StemDLClassifier(pl.LightningModule):
         self.accuracy(y_hat, y)
         self.f1_score(y_hat, y)
 
-    # def test_epoch_end(self, outputs):
-    #     avg_accuracy = self.accuracy.compute()
-    #     avg_f1 = self.f1_score.compute()
-    #     self.log('accuracy', avg_accuracy * 100)
-    #     self.log('f1', avg_f1 * 100)
-    #     self.accuracy.reset()
-    #     self.f1_score.reset()
-    
-    # def on_test_epoch_end(self) -> None:
-    #     # Access stored outputs
-    #     outputs = self.test_outputs
-    #     avg_accuracy = self.accuracy.compute()
-    #     avg_f1 = self.f1_score.compute()
-    #     self.log('accuracy', avg_accuracy * 100)
-    #     self.log('f1', avg_f1 * 100)
-    #     self.accuracy.reset()
-    #     self.f1_score.reset()
-    def on_test_epoch_end(self) -> None:
-        avg_accuracy = torch.mean(torch.tensor([out['accuracy'] for out in self.test_outputs]))
-        avg_f1 = torch.mean(torch.tensor([out['f1'] for out in self.test_outputs]))
+        # Collect test outputs for later use
+        self.test_outputs.append({
+            'loss': loss,
+            'accuracy': self.accuracy.compute(),
+            'f1': self.f1_score.compute()
+        })
 
-        self.log('accuracy', avg_accuracy * 100)
-        self.log('f1', avg_f1 * 100)
+    def on_test_epoch_end(self) -> None:
+        # Calculate averages of the collected metrics
+        avg_accuracy = torch.mean(torch.tensor([out['accuracy'] for out in self.test_outputs], dtype=torch.float))
+        avg_f1 = torch.mean(torch.tensor([out['f1'] for out in self.test_outputs], dtype=torch.float))
+
+        self.log('accuracy', avg_accuracy * 100, sync_dist=True)
+        self.log('f1', avg_f1 * 100, sync_dist=True)
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
-        x, y = batch
+        x, _ = batch
         y_hat = self.model(x)
         return y_hat
 
