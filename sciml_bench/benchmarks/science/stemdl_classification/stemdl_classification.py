@@ -22,7 +22,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import random_split
 from torchvision import transforms
 import pytorch_lightning as pl
-from pytorch_lightning.plugins import DDPPlugin
+#from pytorch_lightning.plugins import DDPPlugin
+from pytorch_lightning.strategies import DDPStrategy
 
 # imports from stemdl
 import time
@@ -84,7 +85,6 @@ class StemDLClassifier(pl.LightningModule):
         self.accuracy = tm.classification.MulticlassAccuracy(self.num_classes)
         self.f1_score = tm.classification.F1Score(task='multiclass', num_classes=self.num_classes, average='macro')
 
-    # forward step
     def forward(self, x):
         embedding = self.model(x)
         return embedding
@@ -110,11 +110,13 @@ class StemDLClassifier(pl.LightningModule):
         self.f1_score(y_hat, y)
         return loss
 
-    def validation_epoch_end(self, outputs):
+    def on_validation_epoch_end(self):
         avg_accuracy = self.accuracy.compute()
         avg_f1 = self.f1_score.compute()
         self.log('valid_accuracy', avg_accuracy, prog_bar=True)
-        self.log('valid_accuracy', avg_f1, prog_bar=True)
+        self.log('valid_f1', avg_f1, prog_bar=True)
+        self.accuracy.reset()
+        self.f1_score.reset()
 
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
@@ -128,9 +130,10 @@ class StemDLClassifier(pl.LightningModule):
     def test_epoch_end(self, outputs):
         avg_accuracy = self.accuracy.compute()
         avg_f1 = self.f1_score.compute()
-
         self.log('accuracy', avg_accuracy * 100)
         self.log('f1', avg_f1 * 100)
+        self.accuracy.reset()
+        self.f1_score.reset()
 
     def predict_step(self, batch, batch_idx, dataloader_idx=0):
         x, y = batch
@@ -164,8 +167,7 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
     # Set data paths
     with log.subproc('Set data paths'):
         basePath = params_in.dataset_dir
-        # modelPath = params_in.output_dir / f'stemdlModel.h5'
-        trainingPath =  os.path.expanduser(basePath / 'training')
+        trainingPath = os.path.expanduser(basePath / 'training')
         validationPath = os.path.expanduser(basePath / 'validation')
         testingPath = os.path.expanduser(basePath / 'testing')
 
@@ -182,7 +184,7 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
         epochs = int(args["epochs"])
         nodes = int(args["nodes"])
         gpus = int(args["gpus"])
-    
+
     with log.subproc('Create datasets'):
         train_dataset = NPZDataset(trainingPath)
         val_dataset = NPZDataset(validationPath)
@@ -200,7 +202,14 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
 
     # Training
     with log.subproc('Start training'):
-        trainer = pl.Trainer(gpus=gpus, num_nodes=nodes, precision=16, strategy="ddp", max_epochs=epochs, default_root_dir=params_in.output_dir)
+        trainer = pl.Trainer(
+            devices=gpus,  # Specify number of devices (GPUs)
+            num_nodes=nodes,  # Number of nodes to use
+            precision='16-mixed',  # Use mixed precision
+            strategy=DDPStrategy(),  # Distributed strategy for training
+            max_epochs=epochs,  # Number of epochs
+            default_root_dir=params_in.output_dir  # Root directory for saving logs and checkpoints
+        )
         start_time = time.time()
         trainer.fit(model, train_loader, val_loader)
         end_time = time.time()
@@ -225,9 +234,9 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
     metrics_file = params_in.output_dir / 'metrics.yml'
     with log.subproc('Saving inference metrics to a file'):
         with open(metrics_file, 'w') as handle:
-            yaml.dump(metrics, handle)  
+            yaml.dump(metrics, handle)
 
-     # End top level
+    # End top level
     log.ended(f'Running benchmark stemdl_classification on training mode')
 
 
@@ -268,11 +277,11 @@ def sciml_bench_inference(params_in: RuntimeIn, params_out: RuntimeOut):
         bs = int(args["batchsize"])
         nodes = int(args["nodes"])
         gpus = int(args["gpus"])
-    
+
     # Create datasets
     with log.subproc('Create datasets'):
         predict_dataset = NPZDataset(inferencePath)
-    
+
     # Create data loaders
     with log.subproc('Create data loaders'):
         predict_loader = DataLoader(predict_dataset, batch_size=bs, num_workers=4)
@@ -284,7 +293,13 @@ def sciml_bench_inference(params_in: RuntimeIn, params_out: RuntimeOut):
 
     # Start inference
     with log.subproc('Inference on the model'):
-        trainer = pl.Trainer(gpus=gpus, num_nodes=nodes, precision=16, strategy="ddp", default_root_dir=params_in.output_dir)
+        trainer = pl.Trainer(
+            devices=gpus,  # Specify number of devices (GPUs)
+            num_nodes=nodes,  # Number of nodes to use
+            precision='16-mixed',  # Use mixed precision
+            strategy=DDPStrategy(),  # Distributed strategy for training
+            default_root_dir=params_in.output_dir  # Root directory for saving logs and checkpoints
+        )
         start_time = time.time()
         metrics = trainer.test(model, dataloaders=predict_loader)
         end_time = time.time()
@@ -298,7 +313,7 @@ def sciml_bench_inference(params_in: RuntimeIn, params_out: RuntimeOut):
     metrics_file = params_in.output_dir / 'metrics.yml'
     with log.subproc('Saving inference metrics to a file'):
         with open(metrics_file, 'w') as handle:
-            yaml.dump(metrics, handle)  
+            yaml.dump(metrics, handle)
 
     # End top level
     log.ended('Running benchmark stemdl_classification on inference mode')
