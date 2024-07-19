@@ -219,7 +219,9 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
     #  Testing
     with log.subproc('Start testing'):
         metrics = trainer.test(model, test_loader)
+        print('Metrics:')
         print(type(metrics))
+        print(metrics)
         # metrics = metrics[0]
         log.message('End testing')
 
