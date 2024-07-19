@@ -226,7 +226,8 @@ def sciml_bench_training(params_in: RuntimeIn, params_out: RuntimeOut):
             metrics = metrics[0]  # Get the first set of metrics
             log.message('End testing')
         except Exception as e:
-            log.error(f"Error during testing or metric retrieval: {e}")
+            # Use available logging method
+            log.message(f"Error during testing or metric retrieval: {e}")
             raise
 
     # Save model
